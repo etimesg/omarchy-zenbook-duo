@@ -23,22 +23,48 @@ symlinked directly:
 - `home/.config/hypr/autostart.lua` — starts `zenbook-duo-screen` at login.
 - `home/.local/bin/zenbook-duo-screen` — daemon that disables `eDP-2` when the
   keyboard is docked and re-enables it when lifted.
+- `setup.sh` — one-command installer for a fresh machine.
 
 ## Install on a fresh machine
 
 ```bash
-# 1. Make the files live. Symlink the whole tree for future git-pull updates:
-ln -s "$PWD/home/." ~/
+./setup.sh --reload --daemon
+```
 
-# 2. The screen daemon must be executable:
+This detects the Zenbook Duo, copies (or `--symlink`s) the config into `~`,
+makes the daemon executable, reloads Hyprland after verifying
+`hyprctl configerrors`, and starts the daemon. It is idempotent and safe to
+re-run.
+
+Manual equivalent:
+
+```bash
+ln -s "$PWD/home/." ~/            # or: cp -r "$PWD/home/." ~/
 chmod +x ~/.local/bin/zenbook-duo-screen
-
-# 3. Reload Hyprland to pick up monitors.lua and autostart.lua:
 hyprctl reload
-
-# 4. Start the daemon now (it also auto-starts on next login):
 systemd-run --user --unit=zenbook-duo-screen --collect ~/.local/bin/zenbook-duo-screen
 ```
+
+## Update safety
+
+These files **survive `omarchy update`**:
+
+- Omarchy migrations only rewrite `input.lua`/`bindings.lua` when they still
+  byte-match the stock file (untouched by the user) plus `hyprland.lua`
+  entrypoint path fixups. `monitors.lua` and `autostart.lua` are never
+  touched by any migration.
+- `~/.local/bin/zenbook-duo-screen` is outside everything Omarchy manages
+  (it only manages mise wrappers and `herdr` there, matched by exact
+  content/filename).
+
+The only ways to reset them are explicit: `omarchy refresh hyprland` (backs up
+first) or `omarchy reinstall-configs` (destructive). Neither runs during a
+normal update.
+
+Note on `--symlink`: a future Omarchy migration that rewrites one of the
+symlinked files would write *through* the symlink into this repo. Copy is the
+default for that reason. Nothing today rewrites these two files, so the risk
+is theoretical.
 
 ## How the screen toggle works
 
