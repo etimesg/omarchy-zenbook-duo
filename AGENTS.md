@@ -19,10 +19,13 @@ Files mirror a normal `~` home directory so they can be dropped in place or
 symlinked directly:
 
 - `home/.config/hypr/monitors.lua` — places `eDP-2` *below* `eDP-1` at `0x900`
-  (Omarchy's default auto-layout put it to the right at `1440x0`).
+  (Omarchy's default auto-layout put it to the right at `1440x0`) and keeps it
+  `disabled` by default so the laptop behaves as a single monitor.
 - `home/.config/hypr/autostart.lua` — starts `zenbook-duo-screen` at login.
-- `home/.local/bin/zenbook-duo-screen` — daemon that disables `eDP-2` when the
-  keyboard is docked and re-enables it when lifted.
+- `home/.local/bin/zenbook-duo-screen` — daemon that keeps `eDP-2` disabled
+  while the keyboard is docked, re-enables it when lifted, and re-asserts the
+  docked state every couple of seconds so Hyprland config reloads can't turn
+  the base screen back on behind its back.
 - `pkg/hid-asus-zenbook-duo-dkms/` — Arch package + DKMS module making the
   keyboard's Fn hotkeys work (see its PKGBUILD and the README).
 - `setup.sh` — one-command installer for a fresh machine.
@@ -76,7 +79,18 @@ is theoretical.
    bridge (`0b05:1b2c`) is present under `/sys/bus/usb/devices/`.
 2. Docked → `hyprctl eval 'hl.monitor({ output = "eDP-2", disabled = true })'`.
 3. Detached → re-enable with position/scale preserved.
-4. It logs decisions to `$XDG_RUNTIME_DIR/zenbook-duo-screen.log`.
+4. A 2s read-timeout turns the `udevadm monitor` wait into a poll, so the
+   live Hyprland state is re-asserted even with no USB event. `apply()` reads
+   the *actual* monitor state (`hyprctl monitors -j`) instead of a cached
+   flag, so a Hyprland config reload — e.g. `omarchy hyprland monitor scaling`
+   rewriting `monitors.lua`, or an Omarchy update — that re-enables `eDP-2`
+   is reverted within a couple of seconds. The re-enable scale is read from
+   `monitors.lua` so lifting the keyboard never snaps back to a stale scale.
+5. It logs decisions to `$XDG_RUNTIME_DIR/zenbook-duo-screen.log`.
+
+`monitors.lua` also ships `eDP-2` with `disabled = true`, so a reload never
+turns the base screen on in the first place and the laptop stays single-monitor
+even if the daemon is not running.
 
 ### Important implementation notes
 

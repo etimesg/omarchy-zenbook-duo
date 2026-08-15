@@ -25,9 +25,18 @@ KBD_PRODUCT="1b2c"
 # rejected ("can't work with non-legacy parsers"). Monitor changes go through
 # `hyprctl eval` with the hl.monitor helper instead.
 DISABLE_EVAL="hl.monitor({ output = \"${BOTTOM}\", disabled = true })"
-ENABLE_EVAL="hl.monitor({ output = \"${BOTTOM}\", disabled = false, mode = \"preferred\", position = \"0x900\", scale = 2 })"
 LOGFILE="${XDG_RUNTIME_DIR:-/tmp}/zenbook-duo-screen.log"
 log() { printf '%s zenbook-duo-screen: %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOGFILE"; }
+
+# Keep the scale we re-enable with in step with monitors.lua, which
+# `omarchy hyprland monitor scaling` rewrites, so lifting the keyboard never
+# snaps the base screen back to a stale scale.
+monitor_scale() {
+    local lua="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.lua"
+    grep -E '^local omarchy_monitor_scale = ' "$lua" 2>/dev/null \
+        | sed -E 's/.*= ([0-9.]+).*/\1/' \
+        | grep -E '^[0-9]+([.][0-9]+)?$' | head -1
+}
 
 kbd_docked() {
     local d vid pid
@@ -43,19 +52,38 @@ kbd_docked() {
     return 1
 }
 
+# Report the bottom monitor's live state: "on" while Hyprland has it enabled,
+# "off" when it is disabled (or not listed among active outputs).
+bottom_state() {
+    if hyprctl monitors -j 2>/dev/null | jq -e --arg m "$BOTTOM" 'any(.[]; .name == $m)' >/dev/null; then
+        echo "on"
+    else
+        echo "off"
+    fi
+}
+
 # Assert the correct monitor state for the current dock status. Stateless and
-# idempotent: re-issuing the same hyprctl keyword is harmless. Only logs on a
-# real change.
+# idempotent: reads the live Hyprland state each time and only issues an eval
+# (and logs) on a real mismatch. Checking reality instead of a cached flag
+# means config reloads that re-enable $BOTTOM behind our back -- for example
+# `omarchy hyprland monitor scaling` editing monitors.lua, which triggers a
+# Hyprland auto-reload -- are corrected on the next pass.
 apply() {
-    local want
+    local want actual
     if kbd_docked; then want="off"; else want="on"; fi
-    [ "$want" = "$STATE" ] && return
+    actual="$(bottom_state)"
+
+    if [ "$want" = "$actual" ]; then
+        STATE="$want"
+        return
+    fi
+
     if [ "$want" = "off" ]; then
         log "keyboard docked -> disabling $BOTTOM"
         hyprctl eval "$DISABLE_EVAL" >/dev/null
     else
         log "keyboard detached -> enabling $BOTTOM"
-        hyprctl eval "$ENABLE_EVAL" >/dev/null
+        hyprctl eval "hl.monitor({ output = \"${BOTTOM}\", disabled = false, mode = \"preferred\", position = \"0x900\", scale = $(monitor_scale || echo 2) })" >/dev/null
     fi
     STATE="$want"
 }
@@ -63,13 +91,23 @@ apply() {
 STATE="unknown"
 apply   # sync once at startup
 
-# React to USB add/remove events. Settle briefly so enumeration finishes, then
-# re-evaluate. apply() is a no-op when nothing changed.
+# React to USB add/remove events and re-assert periodically.
 #
 #   - stdbuf -oL line-buffers udevadm's stdout; without it the pipe
 #     block-buffers and the loop never sees events promptly.
+#   - The 2s read timeout turns the blocking wait into a poll, so a Hyprland
+#     reload that re-enables $BOTTOM (monitor-scale edits, omarchy updates,
+#     lid/bind handling) is reverted within a couple of seconds even with no
+#     USB event. read returns >128 on timeout and 1 on EOF, so the poll never
+#     spins if udevadm dies.
 #   - process substitution keeps the loop in the main shell so STATE persists.
-while read -r _; do
-    sleep 0.4
+while true; do
+    read -t 2 -r _
+    rc=$?
+    if (( rc == 0 )); then
+        sleep 0.4
+    elif (( rc < 128 )); then
+        sleep 5
+    fi
     apply
 done < <(stdbuf -oL udevadm monitor --udev --subsystem-match=usb 2>/dev/null)
