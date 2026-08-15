@@ -23,6 +23,8 @@ symlinked directly:
 - `home/.config/hypr/autostart.lua` — starts `zenbook-duo-screen` at login.
 - `home/.local/bin/zenbook-duo-screen` — daemon that disables `eDP-2` when the
   keyboard is docked and re-enables it when lifted.
+- `pkg/hid-asus-zenbook-duo-dkms/` — Arch package + DKMS module making the
+  keyboard's Fn hotkeys work (see its PKGBUILD and the README).
 - `setup.sh` — one-command installer for a fresh machine.
 
 ## Install on a fresh machine

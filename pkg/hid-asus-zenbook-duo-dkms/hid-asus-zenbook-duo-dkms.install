@@ -1,0 +1,19 @@
+post_install() {
+    dkms add -m hid-asus-zenbook-duo -v 0.1.0
+    dkms build -m hid-asus-zenbook-duo -v 0.1.0 -k "$(uname -r)"
+    dkms install -m hid-asus-zenbook-duo -v 0.1.0 -k "$(uname -r)" --force
+    depmod "$(uname -r)"
+}
+
+post_upgrade() {
+    post_install
+    # Reload so the new module takes effect without a reboot.
+    if lsmod | grep -q '^hid_asus '; then
+        rmmod hid_asus 2>/dev/null || true
+    fi
+    modprobe hid_asus 2>/dev/null || true
+}
+
+pre_remove() {
+    dkms remove -m hid-asus-zenbook-duo -v 0.1.0 --all || true
+}

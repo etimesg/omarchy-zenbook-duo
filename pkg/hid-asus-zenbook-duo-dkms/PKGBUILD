@@ -1,0 +1,50 @@
+# Maintainer: etimesg <etimesg@users.noreply.github.com>
+# PKGBUILD for the ASUS Zenbook Duo patched hid-asus kernel module, built
+# via DKMS so it survives kernel upgrades.
+#
+# The module source (hid-asus.c/hid-ids.h) is the upstream linux-input
+# patch series "ASUS Zenbook Duo keyboard support" (May 2026, series
+# https://patchwork.kernel.org/project/linux-input/list/?series=1094331)
+# applied on top of the v7.1.8 (linux-stable) source, plus a backport of the
+# Aug 11 2026 follow-up fix (series
+# https://patchwork.kernel.org/project/linux-input/list/?series=14743250)
+# that re-sends the 0x5a handshake from delayed work, because configuring
+# the touchpad on the sibling USB interface resets the keyboard to F-key
+# mode. The series is not yet merged upstream; this package backports it.
+#
+# The DKMS packaging is inspired by and cross-checked against
+# lewisdenny/zenbook-duo-hid-asus-dkms (https://github.com/lewisdenny/zenbook-duo-hid-asus-dkms).
+
+pkgname=hid-asus-zenbook-duo-dkms
+pkgver=0.1.0
+pkgrel=2
+pkgdesc="Patched hid-asus kernel module with ASUS Zenbook Duo (UX8406MA) keyboard support (Fn hotkeys, keyboard backlight)"
+arch=('x86_64')
+url="https://github.com/etimesg/omarchy-zenbook-duo"
+license=('GPL-2.0-only')
+depends=('dkms')
+makedepends=('gcc' 'make' 'linux-headers')
+install='hid-asus-zenbook-duo-dkms.install'
+source=(
+  "hid-asus.c"
+  "hid-ids.h"
+  "Makefile"
+  "dkms.conf"
+)
+sha256sums=(
+  '61dda86c735d192cdd729976e8b57c1715b2cfc667faeffce8c7c63ade3936fe'
+  '8ce20bf93eeee6b45d67d56dbdbf8e848db8ecffcbc15ec9dfc3a3a2998b6888'
+  'd0a35ea7a8d3d3e979d98a1d847eb7945f2efee256cd4438f770927f1d7d9bec'
+  '411064eefe34f6378d1c70aee87baebf4b7dd86d2f54a57aa3b6db2f15376cf6'
+)
+
+package() {
+  install -Dm644 "$srcdir/dkms.conf" \
+    "$pkgdir/usr/src/hid-asus-zenbook-duo-$pkgver/dkms.conf"
+  install -Dm644 "$srcdir/Makefile" \
+    "$pkgdir/usr/src/hid-asus-zenbook-duo-$pkgver/Makefile"
+  install -Dm644 "$srcdir/hid-asus.c" \
+    "$pkgdir/usr/src/hid-asus-zenbook-duo-$pkgver/hid-asus.c"
+  install -Dm644 "$srcdir/hid-ids.h" \
+    "$pkgdir/usr/src/hid-asus-zenbook-duo-$pkgver/hid-ids.h"
+}

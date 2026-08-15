@@ -1,0 +1,11 @@
+# makepkg / DKMS build artifacts
+pkg/hid-asus-zenbook-duo-dkms/pkg/
+pkg/hid-asus-zenbook-duo-dkms/src/
+pkg/hid-asus-zenbook-duo-dkms/*.pkg.tar.zst
+pkg/hid-asus-zenbook-duo-dkms/*.pkg.tar.zst.sig
+pkg/hid-asus-zenbook-duo-dkms/*.o
+pkg/hid-asus-zenbook-duo-dkms/*.ko
+pkg/hid-asus-zenbook-duo-dkms/*.mod
+pkg/hid-asus-zenbook-duo-dkms/*.mod.c
+pkg/hid-asus-zenbook-duo-dkms/*.symvers
+pkg/hid-asus-zenbook-duo-dkms/.module-common.o
