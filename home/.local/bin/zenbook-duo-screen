@@ -82,8 +82,13 @@ apply() {
         log "keyboard docked -> disabling $BOTTOM"
         hyprctl eval "$DISABLE_EVAL" >/dev/null
     else
-        log "keyboard detached -> enabling $BOTTOM"
-        hyprctl eval "hl.monitor({ output = \"${BOTTOM}\", disabled = false, mode = \"preferred\", position = \"0x900\", scale = $(monitor_scale || echo 2) })" >/dev/null
+        local scale bottom_y
+        scale="$(monitor_scale || echo 2)"
+        # Panels are 2880x1800; the base screen sits at its logical height,
+        # 1800 / scale (e.g. 1125 at scale 1.6), directly under the top screen.
+        bottom_y="$(awk -v s="$scale" 'BEGIN { printf "%d", 1800 / s }')"
+        log "keyboard detached -> enabling $BOTTOM at 0x${bottom_y} scale ${scale}"
+        hyprctl eval "hl.monitor({ output = \"${BOTTOM}\", disabled = false, mode = \"preferred\", position = \"0x${bottom_y}\", scale = ${scale} })" >/dev/null
     fi
     STATE="$want"
 }

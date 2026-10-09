@@ -3,24 +3,40 @@
 This repository contains my Omarchy (Arch + Hyprland) configuration for the
 **ASUS Zenbook Duo (UX8406MA)**, which has two internal panels:
 
-| Output | Panel        | Where it sits           |
-|--------|--------------|-------------------------|
-| `eDP-1`| Main display | Top (2880x1800, scale 2)|
-| `eDP-2`| Base display | Bottom (2880x1800, scale 2) |
+| Output | Panel        | Where it sits                |
+|--------|--------------|------------------------------|
+| `eDP-1`| Main display | Top (2880x1800, scale 1.6)   |
+| `eDP-2`| Base display | Bottom (2880x1800, scale 1.6)|
 
 The Duo's keyboard is detachable. It connects over a **pogo-pin USB bridge**
 (vendor `0b05`, product `1b2c`) when docked over the base screen, and falls
 back to **Bluetooth** (vendor `0b05`, product `1b2d`) when lifted off. We use
 the USB presence as the dock sensor.
 
+## Before changing anything
+
+Everything in this repo is a workaround. Whenever you touch it, first check
+whether the workaround is still needed or a better option now exists:
+
+- **Kernel / HID:** is the Zenbook Duo `hid-asus` support merged upstream yet?
+  Check `drivers/hid/hid-asus.c` for a `QUIRK_ZENBOOK_DUO*` quirk or a
+  `UX8406MA`/`UX8406CA` device entry. If it landed, drop
+  `pkg/hid-asus-zenbook-duo-dkms/` instead of extending it.
+- **Monitor layout / dock toggle:** has Hyprland, the Omarchy kernel, or the
+  Duo firmware gained native dual-panel or dock-detection support that makes
+  `zenbook-duo-screen` and the manual `monitors.lua` offsets unnecessary?
+- Prefer deleting a workaround over adding to it. Only extend one after
+  confirming there is no upstream fix, and record what you checked here.
+
 ## File layout
 
 Files mirror a normal `~` home directory so they can be dropped in place or
 symlinked directly:
 
-- `home/.config/hypr/monitors.lua` — places `eDP-2` *below* `eDP-1` at `0x900`
-  (Omarchy's default auto-layout put it to the right at `1440x0`) and keeps it
-  `disabled` by default so the laptop behaves as a single monitor.
+- `home/.config/hypr/monitors.lua` — places `eDP-2` *below* `eDP-1` at a
+  y-offset derived from the monitor scale (`1800 / scale`, e.g. `0x1125` at
+  scale 1.6; Omarchy's default auto-layout puts it to the right instead) and
+  keeps it `disabled` by default so the laptop behaves as a single monitor.
 - `home/.config/hypr/autostart.lua` — starts `zenbook-duo-screen` at login.
 - `home/.local/bin/zenbook-duo-screen` — daemon that keeps `eDP-2` disabled
   while the keyboard is docked, re-enables it when lifted, and re-asserts the
