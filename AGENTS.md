@@ -1,135 +1,88 @@
 # AGENTS.md
 
-This repository contains my Omarchy (Arch + Hyprland) configuration for the
-**ASUS Zenbook Duo (UX8406MA)**, which has two internal panels:
+This repository ships **one thing**: the DKMS package that patches `hid-asus`
+for the **ASUS Zenbook Duo (UX8406MA)** detachable keyboard.
 
-| Output | Panel        | Where it sits                |
-|--------|--------------|------------------------------|
-| `eDP-1`| Main display | Top (2880x1800, scale 1.6)   |
-| `eDP-2`| Base display | Bottom (2880x1800, scale 1.6)|
+The desktop configuration that used to live here (`home/`, `setup.sh`) moved to
+[locomarchy](https://github.com/etimesg/locomarchy), whose `zenbook-duo` feature
+owns the monitor layout, the dock watcher, and the workspace sync. Those files
+remain here for history only and are not maintained. `setup.sh` refuses to run
+while locomarchy's managed blocks are present, because copying the old files
+over them would replace the dock watcher and the monitor layout.
 
-The Duo's keyboard is detachable. It connects over a **pogo-pin USB bridge**
-(vendor `0b05`, product `1b2c`) when docked over the base screen, and falls
-back to **Bluetooth** (vendor `0b05`, product `1b2d`) when lifted off. We use
-the USB presence as the dock sensor.
+## Hardware
+
+The Duo has two internal panels:
+
+| Output | Panel        | Where it sits                 |
+|--------|--------------|-------------------------------|
+| `eDP-1`| Main display | Top (2880x1800, scale 1.6)    |
+| `eDP-2`| Base display | Bottom (2880x1800, scale 1.6) |
+
+The keyboard is detachable. It connects over a **pogo-pin USB bridge** (vendor
+`0b05`, product `1b2c`) when docked over the base screen, and falls back to
+**Bluetooth** (`0b05:1b2d`) when lifted off. USB presence is the dock sensor.
 
 ## Before changing anything
 
-Everything in this repo is a workaround. Whenever you touch it, first check
-whether the workaround is still needed or a better option now exists:
+Everything here is a workaround. First check whether it is still needed:
 
-- **Kernel / HID:** is the Zenbook Duo `hid-asus` support merged upstream yet?
-  Check `drivers/hid/hid-asus.c` for a `QUIRK_ZENBOOK_DUO*` quirk or a
-  `UX8406MA`/`UX8406CA` device entry. If it landed, drop
-  `pkg/hid-asus-zenbook-duo-dkms/` instead of extending it.
-- **Monitor layout / dock toggle:** has Hyprland, the Omarchy kernel, or the
-  Duo firmware gained native dual-panel or dock-detection support that makes
-  `zenbook-duo-screen` and the manual `monitors.lua` offsets unnecessary?
-- Prefer deleting a workaround over adding to it. Only extend one after
-  confirming there is no upstream fix, and record what you checked here.
+- **Kernel / HID:** is Zenbook Duo support merged upstream yet? Look for a
+  `QUIRK_ZENBOOK_DUO*` quirk or a `UX8406MA`/`UX8406CA` device entry in
+  `drivers/hid/hid-asus.c` and `drivers/hid/hid-ids.h`. As of kernel 7.2.15
+  (checked against `v7.2` and `master`) there are none, so the package is still
+  required. If it lands upstream, delete `pkg/hid-asus-zenbook-duo-dkms/`
+  rather than extending it.
+- **Desktop behaviour:** monitor stacking, dock detection, and workspace
+  synchronization are locomarchy's problem now, not this repo's.
+- Prefer deleting a workaround over adding to it. Record what you checked.
 
 ## File layout
 
-Files mirror a normal `~` home directory so they can be dropped in place or
-symlinked directly:
+- `pkg/hid-asus-zenbook-duo-dkms/` — the maintained part: patched `hid-asus`
+  source, `PKGBUILD`, `dkms.conf`, and the `.install` script.
+- `home/`, `setup.sh` — legacy, superseded by locomarchy. Do not extend.
 
-- `home/.config/hypr/monitors.lua` — places `eDP-2` *below* `eDP-1` at a
-  y-offset derived from the monitor scale (`1800 / scale`, e.g. `0x1125` at
-  scale 1.6; Omarchy's default auto-layout puts it to the right instead) and
-  keeps it `disabled` by default so the laptop behaves as a single monitor.
-- `home/.config/hypr/autostart.lua` — starts `zenbook-duo-screen` at login.
-- `home/.local/bin/zenbook-duo-screen` — daemon that keeps `eDP-2` disabled
-  while the keyboard is docked, re-enables it when lifted, and re-asserts the
-  docked state every couple of seconds so Hyprland config reloads can't turn
-  the base screen back on behind its back.
-- `pkg/hid-asus-zenbook-duo-dkms/` — Arch package + DKMS module making the
-  keyboard's Fn hotkeys work (see its PKGBUILD and the README).
-- `setup.sh` — one-command installer for a fresh machine.
-
-## Install on a fresh machine
+## Build and install
 
 ```bash
-./setup.sh --reload --daemon
+cd pkg/hid-asus-zenbook-duo-dkms
+makepkg -f                 # needs dkms + linux-omarchy-headers on Omarchy
+sudo pacman -U hid-asus-zenbook-duo-dkms-0.1.0-2-x86_64.pkg.tar.zst
 ```
 
-This detects the Zenbook Duo, copies (or `--symlink`s) the config into `~`,
-makes the daemon executable, reloads Hyprland after verifying
-`hyprctl configerrors`, and starts the daemon. It is idempotent and safe to
-re-run.
+The `.install` script runs `dkms add/build/install` for the running kernel and
+reloads the module. DKMS rebuilds it on kernel upgrades, so a reinstall is not
+needed after each update.
 
-Manual equivalent:
+## Verify
 
 ```bash
-ln -s "$PWD/home/." ~/            # or: cp -r "$PWD/home/." ~/
-chmod +x ~/.local/bin/zenbook-duo-screen
-hyprctl reload
-systemd-run --user --unit=zenbook-duo-screen --collect ~/.local/bin/zenbook-duo-screen
+dkms status                      # hid-asus-zenbook-duo/0.1.0, <kernel>: installed
+lsmod | grep hid_asus            # loaded
+modinfo -n hid_asus              # must resolve under updates/dkms, not kernel/
+journalctl -k | grep -i asus     # "Fixing up ZENBOOK DUO keyb report descriptor"
+                                 # and no "handshake ... failed to send"
 ```
 
-## Update safety
+The in-tree `hid-asus.ko` has no Zenbook strings, so a path outside
+`updates/dkms` means the patched module is not the one loaded.
 
-These files **survive `omarchy update`**:
+## Legacy notes worth keeping
 
-- Omarchy migrations only rewrite `input.lua`/`bindings.lua` when they still
-  byte-match the stock file (untouched by the user) plus `hyprland.lua`
-  entrypoint path fixups. `monitors.lua` and `autostart.lua` are never
-  touched by any migration.
-- `~/.local/bin/zenbook-duo-screen` is outside everything Omarchy manages
-  (it only manages mise wrappers and `herdr` there, matched by exact
-  content/filename).
+These only matter if you deliberately revive `home/`:
 
-The only ways to reset them are explicit: `omarchy refresh hyprland` (backs up
-first) or `omarchy reinstall-configs` (destructive). Neither runs during a
-normal update.
+- **Hyprland 0.56 uses the Lua config parser.** `hyprctl keyword monitor …` is
+  rejected; monitor changes must go through `hyprctl eval` with `hl.monitor`.
+- **Read USB vendor/product with `cat`, not `$(<file 2>/dev/null)`.** The
+  redirection disables bash's fast-read and returns an empty string.
+- Re-enabling a monitor needs `disabled = false` explicitly.
+- Validate any Hyprland config change with `hyprctl reload && hyprctl configerrors`
+  before committing.
 
-Note on `--symlink`: a future Omarchy migration that rewrites one of the
-symlinked files would write *through* the symlink into this repo. Copy is the
-default for that reason. Nothing today rewrites these two files, so the risk
-is theoretical.
+## Committing
 
-## How the screen toggle works
-
-`zenbook-duo-screen` runs a stateless, idempotent loop:
-
-1. On startup and on every USB add/remove event it checks whether the keyboard
-   bridge (`0b05:1b2c`) is present under `/sys/bus/usb/devices/`.
-2. Docked → `hyprctl eval 'hl.monitor({ output = "eDP-2", disabled = true })'`.
-3. Detached → re-enable with position/scale preserved.
-4. A 2s read-timeout turns the `udevadm monitor` wait into a poll, so the
-   live Hyprland state is re-asserted even with no USB event. `apply()` reads
-   the *actual* monitor state (`hyprctl monitors -j`) instead of a cached
-   flag, so a Hyprland config reload — e.g. `omarchy hyprland monitor scaling`
-   rewriting `monitors.lua`, or an Omarchy update — that re-enables `eDP-2`
-   is reverted within a couple of seconds. The re-enable scale is read from
-   `monitors.lua` so lifting the keyboard never snaps back to a stale scale.
-5. It logs decisions to `$XDG_RUNTIME_DIR/zenbook-duo-screen.log`.
-
-`monitors.lua` also ships `eDP-2` with `disabled = true`, so a reload never
-turns the base screen on in the first place and the laptop stays single-monitor
-even if the daemon is not running.
-
-### Important implementation notes
-
-- **Hyprland 0.56 uses the Lua config parser.** The old `hyprctl keyword
-  monitor eDP-2,disable` is rejected (`keyword can't work with non-legacy
-  parsers. Use eval.`). Monitor changes MUST go through `hyprctl eval` with
-  the `hl.monitor` helper, as in the script.
-- **Read USB vendor/product with `cat`, not `$(<file 2>/dev/null)`.**
-  In bash, adding `2>/dev/null` to the `$(<file)` fast-read disables it and
-  returns an empty string, making the keyboard always look detached.
-- `hyprctl eval` needs the compositor's environment, so the daemon must run
-  from a Hyprland session (autostart.lua), not from a bare shell.
-- Re-enabling a monitor requires `disabled = false` explicitly; just passing
-  mode/position does not clear the flag.
-
-## Committing changes
-
-When editing Hyprland config in this repo, keep the live copy in sync
-(`~/.config/hypr/`, `~/.local/bin/`) and validate with:
-
-```bash
-hyprctl reload && hyprctl configerrors
-```
-
-Then re-run `systemd-run` above (or restart Hyprland) to verify the daemon.
-Only commit after `hyprctl configerrors` reports clean.
+Keep `PKGBUILD`/`dkms.conf` versions in step, rebuild the package, and confirm
+`dkms status` plus the dmesg lines above on the running kernel. Do not commit
+built `.pkg.tar.zst` artifacts unless the release process explicitly calls for
+it.

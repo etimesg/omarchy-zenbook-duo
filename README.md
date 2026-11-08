@@ -1,15 +1,21 @@
 # omarchy-zenbook-duo
 
-Omarchy (Arch + Hyprland) configuration for the **ASUS Zenbook Duo UX8406MA**,
-including a DKMS-packaged patched `hid-asus` driver that makes the detachable
-keyboard's Fn hotkeys and backlight work under Linux.
+The **DKMS-packaged patched `hid-asus` driver** that makes the ASUS Zenbook Duo
+UX8406MA detachable keyboard's Fn hotkeys and backlight work under Linux.
+
+> **The desktop configuration moved to
+> [locomarchy](https://github.com/etimesg/locomarchy).** `home/` and `setup.sh`
+> are kept for history only. They are not installed and not maintained, and
+> `setup.sh` now refuses to run while locomarchy's Duo blocks are present —
+> it would overwrite them with older copies. Use locomarchy's `zenbook-duo`
+> feature for the monitor layout, dock watcher, and workspace sync.
 
 ## Contents
 
-- `home/` — Hyprland config + screen-toggle daemon (see `AGENTS.md`).
 - `pkg/hid-asus-zenbook-duo-dkms/` — the patched `hid-asus` kernel module as an
-  Arch package (DKMS), described below.
-- `setup.sh` — one-command installer for the desktop config.
+  Arch package (DKMS), described below. **This is the part to install.**
+- `home/`, `setup.sh` — legacy Omarchy config from before locomarchy; not
+  installed, not maintained.
 
 ## Why a patched kernel module?
 
@@ -36,7 +42,8 @@ the running kernel, and loads it. Because of DKMS it survives kernel upgrades
 
 ```bash
 cd pkg/hid-asus-zenbook-duo-dkms
-makepkg -f                 # build the package (needs dkms, linux-headers)
+makepkg -f                 # build the package (needs dkms and kernel headers;
+                           # on Omarchy: linux-omarchy-headers)
 sudo pacman -U hid-asus-zenbook-duo-dkms-0.1.0-2-x86_64.pkg.tar.zst
 ```
 
@@ -139,10 +146,15 @@ others; we take no credit for the driver code:
   (Fedora DKMS packaging of the same work):
   <https://github.com/lewisdenny/zenbook-duo-hid-asus-dkms>
 
-Neither series is merged into mainline as of this writing (kernel 7.1.8), which
-is why this package ships the patched source.
+Neither series is merged into mainline as of kernel 7.2.15 (checked against
+`v7.2` and `master`: no `UX8406` or `ZENBOOK_DUO` hits in
+`drivers/hid/hid-asus.c` / `hid-ids.h`), which is why this package ships the
+patched source. Re-check those files for a Zenbook Duo quirk before extending
+this package (see `AGENTS.md`).
 
-The desktop configuration (`home/`, `setup.sh`) is original to this repository.
+The legacy desktop configuration (`home/`, `setup.sh`) is original to this
+repository; the maintained version lives in
+[locomarchy](https://github.com/etimesg/locomarchy).
 
 ## License
 

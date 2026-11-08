@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the ASUS Zenbook Duo Omarchy configuration on this machine.
 #
-#   setup.sh [--symlink] [--daemon] [--reload]
+#   setup.sh [--symlink] [--daemon] [--reload] [--force]
 #
 # Options:
 #   --symlink   Symlink ~/.config/hypr/* and ~/.local/bin/* into the repo
@@ -11,6 +11,12 @@
 #               for that reason).
 #   --daemon    Also start the screen-toggle daemon now (systemd user unit).
 #   --reload    Also reload Hyprland after installing.
+#   --force     Install even on other hardware, or over locomarchy's managed
+#               blocks. Both are destructive, so they need the explicit flag.
+#
+# LEGACY: the maintained desktop configuration is locomarchy's zenbook-duo
+# feature. This installer refuses to run while that feature's blocks are
+# present, because it would overwrite them with the older versions.
 #
 # Safe to re-run; every step is idempotent.
 
@@ -22,13 +28,15 @@ HOME_TREE="$REPO_DIR/home"
 MODE="copy"
 RUN_DAEMON=0
 RELOAD=0
+FORCE=0
 for arg in "$@"; do
   case "$arg" in
     --symlink) MODE="symlink" ;;
     --daemon) RUN_DAEMON=1 ;;
     --reload) RELOAD=1 ;;
+    --force) FORCE=1 ;;
     --help|-h)
-      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -38,8 +46,21 @@ for arg in "$@"; do
   esac
 done
 
+# Refuse to overwrite locomarchy's managed blocks: they own the same files this
+# script copies over, including the dock watcher and the monitor layout.
+if (( FORCE == 0 )) && {
+  grep -q -- '-- >>> locomarchy:zenbook-duo' "$HOME/.config/hypr/bindings.lua" 2>/dev/null ||
+  grep -q -- '-- >>> locomarchy:zenbook-duo-monitors' "$HOME/.config/hypr/monitors.lua" 2>/dev/null
+}; then
+  echo "locomarchy's Zenbook Duo feature is installed on this machine." >&2
+  echo "This legacy installer would overwrite its managed blocks." >&2
+  echo "Use locomarchy instead: ./install.sh zenbook-duo" >&2
+  echo "Re-run with --force only if you really mean to replace it." >&2
+  exit 1
+fi
+
 # Refuse to run on anything but a Zenbook Duo (UX8406) unless forced.
-if [[ ${1:-} != --force ]] && ! grep -q "Zenbook Duo" /sys/class/dmi/id/product_name 2>/dev/null; then
+if (( FORCE == 0 )) && ! grep -q "Zenbook Duo" /sys/class/dmi/id/product_name 2>/dev/null; then
   echo "This config targets the ASUS Zenbook Duo (UX8406)." >&2
   echo "Detected product: $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)" >&2
   echo "Re-run with --force to install anyway." >&2
